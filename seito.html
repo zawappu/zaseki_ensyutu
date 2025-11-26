@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>生徒名登録ページ</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 800px; }
+    textarea { width: 100%; height: 200px; margin-bottom: 10px; }
+    input[type="file"] { margin-bottom: 10px; }
+    button, a { margin-top: 10px; padding: 6px 12px; display: inline-block; text-decoration: none; }
+    a { background-color: #eee; border: 1px solid #ccc; color: #333; }
+    h2 { margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <h1>生徒名登録ページ</h1>
+  <p>1行に「番号,名前」の形式で入力してください（例：1,佐藤）。<br>
+     CSVファイルを読み込むこともできます。</p>
+
+  <textarea id="studentInput" placeholder="1,佐藤\n2,鈴木\n3,高橋"></textarea>
+  <input type="file" accept=".csv" onchange="loadCSV(event)">
+  <br>
+  <button onclick="saveStudents()">生徒データを保存</button>
+
+  <h2>リンク</h2>
+  <a href="tokutei.html">➡ 特定配置設定ページへ</a><br>
+  <a href="index.html">➡ 座席抽選ページへ</a>
+
+  <script>
+    function loadCSV(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        document.getElementById("studentInput").value = text.trim();
+      };
+      reader.readAsText(file);
+    }
+
+    function saveStudents() {
+      const input = document.getElementById("studentInput").value.trim();
+      const lines = input.split("\n").map(line => line.split(",").map(s => s.trim()));
+      const valid = lines.filter(pair => pair.length === 2 && pair[0] && pair[1]);
+
+      const seenNums = new Set();
+      const seenNames = new Set();
+      for (const [num, name] of valid) {
+        if (seenNums.has(num)) {
+          alert(`番号 ${num} が重複しています`);
+          return;
+        }
+        if (seenNames.has(name)) {
+          alert(`名前 ${name} が重複しています`);
+          return;
+        }
+        seenNums.add(num);
+        seenNames.add(name);
+      }
+
+      localStorage.setItem("studentList", JSON.stringify(valid));
+      alert("生徒データを保存しました");
+    }
+
+    window.onload = () => {
+      const savedStudents = localStorage.getItem("studentList");
+      if (savedStudents) {
+        const lines = JSON.parse(savedStudents).map(pair => pair.join(",")).join("\n");
+        document.getElementById("studentInput").value = lines;
+      }
+    };
+  </script>
+</body>
+</html>
