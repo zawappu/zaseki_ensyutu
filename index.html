@@ -187,7 +187,7 @@
         finalSeatNum = remaining[idx];
       }
 
-            let speed = 50;
+            let speed = 20;
       const resultEl = document.getElementById("result");
       resultEl.style.fontSize = "2.5em"; // ✅ 文字サイズをさらに大きく
 
@@ -210,7 +210,7 @@
         highlightSeat = randomNum;
 
         // 徐々に遅くしていく
-        if (speed < 600) {
+        if (speed < 500) {
           speed += 30; // 速度を少しずつ遅く
           setTimeout(runDrum, speed);
         } else {
@@ -257,3 +257,4 @@
   </script>
 </body>
 </html>
+
