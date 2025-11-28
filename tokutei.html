@@ -2,70 +2,51 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>座席抽選アプリ（6×6）</title>
+  <title>特定配置設定ページ</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
-    h1, h2 { margin: 0 0 10px; }
     #students button {
       margin: 4px; padding: 6px 10px; border: 1px solid #ccc; background: #f8f8f8; cursor: pointer;
     }
     #students button.selected {
       background: #2d7ff9; color: #fff; border-color: #2d7ff9;
     }
-    #students button.assigned {
-      background: #aaa; color: #fff; cursor: not-allowed;
-    }
-    table { border-collapse: collapse; margin-top: 10px; }
+    table { border-collapse: collapse; margin-top: 20px; }
     td {
       width: 90px; height: 40px;
       text-align: center; border: 1px solid #ccc;
       cursor: pointer; user-select: none;
     }
-    td.inactive { background-color: #eee; color: #999; }
-    td.assigned { background-color: #cfe9cf; }
-    td.highlight { background-color: yellow; }
-    .controls { margin: 10px 0; }
-    .hint { color: #666; font-size: 0.9em; }
-    #result { font-size: 2.5em; margin-top: 15px; }
+    td.fixed {
+      background-color: #cfe9cf;
+    }
+    h2 { margin-top: 30px; }
+    button, a { margin-top: 10px; padding: 6px 12px; display: inline-block; text-decoration: none; }
+    a { background-color: #eee; border: 1px solid #ccc; color: #333; }
   </style>
 </head>
 <body>
-  <a href="seito.html">➡ 生徒名登録ページへ</a>　
-  <h1>座席抽選アプリ（6×6）</h1>
+  <h1>特定配置設定ページ</h1>
+  <p>生徒の名前を選択してから座席をクリックすると、その席に固定配置されます。<br>
+     一人の生徒は必ず一つの席だけに固定されます。</p>
 
-  <p class="hint">1) 自分の出席番号をクリック → 2) 「座席番号を抽選」を押す → 3) 出た番号の座席に割当て。席セルをクリックすると使用可/不可を切り替えできます。</p>
-
-  <h2>出席番号をクリックしてください</h2>
+  <h2>生徒一覧</h2>
   <div id="students"></div>
-  <p id="result"></p>
 
   <h2>座席表（6×6）</h2>
   <table id="seatMap"></table>
 
-  <div class="controls">
-    <button id="drawBtn">座席番号を抽選</button>
-    <button id="resetBtn">抽選をリセット</button>
-    <label style="margin-left:12px;">
-      <input type="checkbox" id="toggleMode"> 座席のON/OFF切替モード
-    </label>
-  </div>
+  <button onclick="saveFixedSeats()">特定配置を保存</button>
+  <button onclick="resetFixedSeats()">特定配置をリセット</button>
+
+  <h2>リンク</h2>
+  <a href="seito.html">➡ 生徒名登録ページへ</a><br>
+  <a href="index.html">➡ 座席抽選ページへ</a>
 
   <script>
     const rows = 6, cols = 6;
-
-    // seatStatus: true=使用、false=未使用
-    let seatStatus = Array.from({ length: rows }, () => Array(cols).fill(true));
-    const savedStatus = localStorage.getItem("seatStatus"); // ✅ 元に戻す
-    if (savedStatus) {
-      try {
-        const parsed = JSON.parse(savedStatus);
-        if (Array.isArray(parsed) && parsed.length === rows) seatStatus = parsed;
-      } catch (e) {}
-    }
-
-    // 生徒一覧
     let studentsData = [];
-    const savedStudents = localStorage.getItem("studentList"); // ✅ 元に戻す
+    const savedStudents = localStorage.getItem("studentList"); // ✅ 元のキー名
     if (savedStudents) {
       try {
         const parsed = JSON.parse(savedStudents);
@@ -76,14 +57,74 @@
       studentsData = Array.from({ length: rows * cols }, (_, i) => [String(i + 1), String(i + 1)]);
     }
 
-    // 特定配置
+    let selectedStudent = null;
     let fixedSeats = [];
-    const savedFixed = localStorage.getItem("fixedSeats"); // ✅ 元に戻す
+    const savedFixed = localStorage.getItem("fixedSeats"); // ✅ 元のキー名
     if (savedFixed) {
       try { fixedSeats = JSON.parse(savedFixed); } catch (e) {}
     }
 
-    // …（以下の抽選処理やリセット処理はそのまま）
+    // 生徒ボタン生成
+    const studentsDiv = document.getElementById("students");
+    studentsData.forEach(([num, name]) => {
+      const btn = document.createElement("button");
+      btn.textContent = `${num}:${name}`;
+      btn.onclick = () => {
+        Array.from(studentsDiv.children).forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        selectedStudent = { num, name };
+      };
+      studentsDiv.appendChild(btn);
+    });
+
+    // 座席表描画
+    function renderSeatMap() {
+      const table = document.getElementById("seatMap");
+      table.innerHTML = "";
+      let seatNum = 1;
+      for (let r = 0; r < rows; r++) {
+        const tr = document.createElement("tr");
+        for (let c = 0; c < cols; c++) {
+          const td = document.createElement("td");
+          const fixed = fixedSeats.find(f => f.row === r && f.col === c);
+          if (fixed) {
+            td.textContent = fixed.name;
+            td.classList.add("fixed");
+          } else {
+            td.textContent = seatNum;
+          }
+          td.onclick = () => {
+            if (!selectedStudent) {
+              alert("まず生徒を選択してください");
+              return;
+            }
+            // その生徒がすでに他の席に固定されていたら削除
+            fixedSeats = fixedSeats.filter(f => f.name !== selectedStudent.name);
+            // この席に固定
+            fixedSeats = fixedSeats.filter(f => !(f.row === r && f.col === c));
+            fixedSeats.push({ name: selectedStudent.name, row: r, col: c });
+            renderSeatMap();
+          };
+          tr.appendChild(td);
+          seatNum++;
+        }
+        table.appendChild(tr);
+      }
+    }
+    renderSeatMap();
+
+    function saveFixedSeats() {
+      localStorage.setItem("fixedSeats", JSON.stringify(fixedSeats)); // ✅ 元のキー名
+      alert("特定配置を保存しました");
+    }
+
+    function resetFixedSeats() {
+      if (!confirm("特定配置をすべてリセットします。よろしいですか？")) return;
+      fixedSeats = [];
+      localStorage.removeItem("fixedSeats"); // ✅ 元のキー名
+      renderSeatMap();
+      alert("特定配置をリセットしました");
+    }
   </script>
 </body>
 </html>
