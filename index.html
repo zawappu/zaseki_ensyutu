@@ -6,21 +6,11 @@
   <style>
     body { font-family: sans-serif; padding: 20px; }
     h1, h2 { margin: 0 0 10px; }
-    #students button {
-      margin: 4px; padding: 6px 10px; border: 1px solid #ccc; background: #f8f8f8; cursor: pointer;
-    }
-    #students button.selected {
-      background: #2d7ff9; color: #fff; border-color: #2d7ff9;
-    }
-    #students button.assigned {
-      background: #aaa; color: #fff; cursor: not-allowed;
-    }
+    #students button { margin: 4px; padding: 6px 10px; border: 1px solid #ccc; background: #f8f8f8; cursor: pointer; }
+    #students button.selected { background: #2d7ff9; color: #fff; border-color: #2d7ff9; }
+    #students button.assigned { background: #aaa; color: #fff; cursor: not-allowed; }
     table { border-collapse: collapse; margin-top: 10px; }
-    td {
-      width: 90px; height: 40px;
-      text-align: center; border: 1px solid #ccc;
-      cursor: pointer; user-select: none;
-    }
+    td { width: 90px; height: 40px; text-align: center; border: 1px solid #ccc; cursor: pointer; user-select: none; }
     td.inactive { background-color: #eee; color: #999; }
     td.assigned { background-color: #cfe9cf; }
     td.highlight { background-color: yellow; }
@@ -31,9 +21,10 @@
 </head>
 <body>
   <a href="seito.html">➡ 生徒名登録ページへ</a>　
+  <a href="toutei.html">➡ 特定配置設定ページへ</a>
   <h1>座席抽選アプリ（6×6）</h1>
 
-  <p class="hint">1) 自分の出席番号をクリック → 2) 「座席番号を抽選」を押す → 3) 出た番号の座席に割当て。席セルをクリックすると使用可/不可を切り替えできます。</p>
+  <p class="hint">1) 出席番号をクリック → 2) 「座席番号を抽選」を押す → 3) 出た番号の座席に割当て。席セルをクリックすると使用可/不可を切替できます。</p>
 
   <h2>出席番号をクリックしてください</h2>
   <div id="students"></div>
@@ -55,47 +46,43 @@
 
     // 座席使用状態
     let seatStatus = Array.from({ length: rows }, () => Array(cols).fill(true));
-    const savedStatus = localStorage.getItem("seatStatus_v2");
+    const savedStatus = localStorage.getItem("seatStatus");
     if (savedStatus) {
-      try {
-        const parsed = JSON.parse(savedStatus);
-        if (Array.isArray(parsed) && parsed.length === rows) seatStatus = parsed;
-      } catch (e) {}
+      try { seatStatus = JSON.parse(savedStatus); } catch (e) {}
     }
 
     // 生徒一覧
     let studentsData = [];
-    const savedStudents = localStorage.getItem("studentList_v2");
+    const savedStudents = localStorage.getItem("studentList");
     if (savedStudents) {
-      try {
-        const parsed = JSON.parse(savedStudents);
-        if (Array.isArray(parsed) && parsed.length > 0) studentsData = parsed;
-      } catch (e) {}
+      try { studentsData = JSON.parse(savedStudents); } catch (e) {}
     }
     if (studentsData.length === 0) {
       studentsData = Array.from({ length: rows * cols }, (_, i) => [String(i + 1), String(i + 1)]);
     }
 
-    // 特定配置
+    // 固定席
     let fixedSeats = [];
-    const savedFixed = localStorage.getItem("fixedSeats_v2");
+    const savedFixed = localStorage.getItem("fixedSeats");
     if (savedFixed) {
       try { fixedSeats = JSON.parse(savedFixed); } catch (e) {}
+    }
+
+    // 固定席番号リスト
+    function getFixedSeatNums() {
+      return fixedSeats.map(f => f.row * cols + f.col + 1);
     }
 
     let selectedNum = null;
     let availableSeats = [];
     function rebuildAvailableSeats() {
       availableSeats = [];
+      const fixedSeatNums = getFixedSeatNums();
       let num = 1;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          if (seatStatus[r][c]) {
-            // ✅ 固定席は availableSeats に含めない
-            const isFixed = fixedSeats.some(f => f.row === r && f.col === c);
-            if (!isFixed) {
-              availableSeats.push(num);
-            }
+          if (seatStatus[r][c] && !fixedSeatNums.includes(num)) {
+            availableSeats.push(num);
           }
           num++;
         }
@@ -140,21 +127,7 @@
           } else {
             td.textContent = seatNum;
           }
-          if (!seatStatus[r][c]) {
-            td.classList.add("inactive");
-          }
-          td.onclick = () => {
-            if (document.getElementById("toggleMode").checked) {
-              if (seatAssignments[seatNum]) {
-                alert("この席にはすでに割り当てがあります。解除してから切り替えてください。");
-                return;
-              }
-              seatStatus[r][c] = !seatStatus[r][c];
-              localStorage.setItem("seatStatus_v2", JSON.stringify(seatStatus));
-              rebuildAvailableSeats();
-              renderSeatMap();
-            }
-          };
+          if (!seatStatus[r][c]) td.classList.add("inactive");
           tr.appendChild(td);
           seatNum++;
         }
@@ -163,86 +136,46 @@
     }
     renderSeatMap();
 
-    // 抽選処理（ドラムロール演出＋座席ハイライト）
+    // 抽選処理
     document.getElementById("drawBtn").onclick = () => {
       if (!selectedNum) {
         alert("まず自分の出席番号ボタンをクリックしてください。");
         return;
       }
       const student = studentsData.find(([num]) => num === selectedNum);
-      const label = student ? `${student[0]}:${student[1]}` : selectedNum;
+      const label = `${student[0]}:${student[1]}`;
 
       if (Object.values(seatAssignments).includes(label)) {
         alert(`${label} さんはすでに座席が割り当て済みです`);
         return;
       }
 
-      // 固定席があるか確認
       const fixed = fixedSeats.find(f => f.name === student[1]);
       let finalSeatNum;
       if (fixed) {
         finalSeatNum = fixed.row * cols + fixed.col + 1;
       } else {
-        const fixedSeatNums = fixedSeats.map(f => f.row * cols + f.col + 1);
+        const fixedSeatNums = getFixedSeatNums();
         const remaining = availableSeats.filter(n => !seatAssignments[n] && !fixedSeatNums.includes(n));
         if (remaining.length === 0) {
           alert("空き座席がありません。");
           return;
         }
-        const idx = Math.floor(Math.random() * remaining.length);
-        finalSeatNum = remaining[idx];
+        finalSeatNum = remaining[Math.floor(Math.random() * remaining.length)];
       }
 
-      let speed = 20;
-      const resultEl = document.getElementById("result");
-      resultEl.style.fontSize = "2.5em";
+      // 確定処理
+      seatAssignments[finalSeatNum] = label;
+      renderSeatMap();
+      document.getElementById("result").textContent = `${label} さんの座席番号は ${finalSeatNum} です 🎉`;
 
-      let highlightSeat = null;
-
-      function runDrum() {
-        const randomNum = availableSeats[Math.floor(Math.random() * availableSeats.length)];
-        resultEl.textContent = `${label} さんの座席番号は … ${randomNum}`;
-
-        if (highlightSeat !== null) {
-          const prevCell = document.querySelector(`#seatMap td[data-seat='${highlightSeat}']`);
-          if (prevCell) prevCell.classList.remove("highlight");
+      Array.from(studentsDiv.children).forEach(b => {
+        if (b.dataset.num === selectedNum) {
+          b.classList.remove("selected");
+          b.classList.add("assigned");
         }
-
-        const newCell = document.querySelector(`#seatMap td[data-seat='${randomNum}']`);
-        if (newCell) newCell.classList.add("highlight");
-        highlightSeat = randomNum;
-
-                if (speed < 500) {
-          speed += 30; // 徐々に遅く
-          setTimeout(runDrum, speed);
-        } else {
-          // 🎉 最終結果で確定
-          seatAssignments[finalSeatNum] = label;
-          resultEl.textContent = `${label} さんの座席番号は ${finalSeatNum} です 🎉`;
-
-          // ハイライト解除
-          if (highlightSeat !== null) {
-            const prevCell = document.querySelector(`#seatMap td[data-seat='${highlightSeat}']`);
-            if (prevCell) prevCell.classList.remove("highlight");
-          }
-          // 確定座席を緑色に
-          const finalCell = document.querySelector(`#seatMap td[data-seat='${finalSeatNum}']`);
-          if (finalCell) finalCell.classList.add("assigned");
-
-          renderSeatMap();
-
-          // 生徒ボタンを「割当済み」に変更
-          Array.from(studentsDiv.children).forEach(b => {
-            if (b.dataset.num === selectedNum) {
-              b.classList.remove("selected");
-              b.classList.add("assigned");
-            }
-          });
-          selectedNum = null;
-        }
-      }
-
-      runDrum();
+      });
+      selectedNum = null;
     };
 
     // リセット処理
@@ -251,7 +184,7 @@
       seatAssignments = {};
       rebuildAvailableSeats();
       selectedNum = null;
-      Array.from(studentsDiv.children).forEach(b => {
+       Array.from(studentsDiv.children).forEach(b => {
         b.classList.remove("selected");
         b.classList.remove("assigned");
       });
@@ -261,4 +194,3 @@
   </script>
 </body>
 </html>
-
