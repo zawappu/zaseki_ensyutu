@@ -26,12 +26,12 @@
     td.highlight { background-color: yellow; }
     .controls { margin: 10px 0; }
     .hint { color: #666; font-size: 0.9em; }
-    #result { font-size: 2em; margin-top: 15px; }
+    #result { font-size: 2.5em; margin-top: 15px; }
   </style>
 </head>
 <body>
-  <a href="seito.html">➡ 生徒名登録ページへ</a>　
-  <h1>座席抽選アプリ（6×6）</h1>
+  <a href="seito_v2.html">➡ 生徒名登録ページへ</a>　
+  <h1>座席抽選アプリ（6×6） v2</h1>
 
   <p class="hint">1) 自分の出席番号をクリック → 2) 「座席番号を抽選」を押す → 3) 出た番号の座席に割当て。席セルをクリックすると使用可/不可を切り替えできます。</p>
 
@@ -42,7 +42,6 @@
   <h2>座席表（6×6）</h2>
   <table id="seatMap"></table>
 
-  <!-- ✅ ボタンを座席表の下に移動 -->
   <div class="controls">
     <button id="drawBtn">座席番号を抽選</button>
     <button id="resetBtn">抽選をリセット</button>
@@ -54,9 +53,9 @@
   <script>
     const rows = 6, cols = 6;
 
-    // seatStatus: true=使用、false=未使用
+    // 座席使用状態
     let seatStatus = Array.from({ length: rows }, () => Array(cols).fill(true));
-    const savedStatus = localStorage.getItem("seatStatus");
+    const savedStatus = localStorage.getItem("seatStatus_v2");
     if (savedStatus) {
       try {
         const parsed = JSON.parse(savedStatus);
@@ -66,7 +65,7 @@
 
     // 生徒一覧
     let studentsData = [];
-    const savedStudents = localStorage.getItem("studentList");
+    const savedStudents = localStorage.getItem("studentList_v2");
     if (savedStudents) {
       try {
         const parsed = JSON.parse(savedStudents);
@@ -79,7 +78,7 @@
 
     // 特定配置
     let fixedSeats = [];
-    const savedFixed = localStorage.getItem("fixedSeats");
+    const savedFixed = localStorage.getItem("fixedSeats_v2");
     if (savedFixed) {
       try { fixedSeats = JSON.parse(savedFixed); } catch (e) {}
     }
@@ -91,7 +90,13 @@
       let num = 1;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          if (seatStatus[r][c]) availableSeats.push(num);
+          if (seatStatus[r][c]) {
+            // ✅ 固定席は availableSeats に含めない
+            const isFixed = fixedSeats.some(f => f.row === r && f.col === c);
+            if (!isFixed) {
+              availableSeats.push(num);
+            }
+          }
           num++;
         }
       }
@@ -145,7 +150,7 @@
                 return;
               }
               seatStatus[r][c] = !seatStatus[r][c];
-              localStorage.setItem("seatStatus", JSON.stringify(seatStatus));
+              localStorage.setItem("seatStatus_v2", JSON.stringify(seatStatus));
               rebuildAvailableSeats();
               renderSeatMap();
             }
@@ -178,7 +183,8 @@
       if (fixed) {
         finalSeatNum = fixed.row * cols + fixed.col + 1;
       } else {
-        const remaining = availableSeats.filter(n => !seatAssignments[n]);
+        const fixedSeatNums = fixedSeats.map(f => f.row * cols + f.col + 1);
+        const remaining = availableSeats.filter(n => !seatAssignments[n] && !fixedSeatNums.includes(n));
         if (remaining.length === 0) {
           alert("空き座席がありません。");
           return;
@@ -187,47 +193,45 @@
         finalSeatNum = remaining[idx];
       }
 
-            let speed = 20;
+      let speed = 20;
       const resultEl = document.getElementById("result");
-      resultEl.style.fontSize = "2.5em"; // ✅ 文字サイズをさらに大きく
+      resultEl.style.fontSize = "2.5em";
 
       let highlightSeat = null;
 
       function runDrum() {
-        // ランダムに数字を選ぶ
         const randomNum = availableSeats[Math.floor(Math.random() * availableSeats.length)];
         resultEl.textContent = `${label} さんの座席番号は … ${randomNum}`;
 
-        // 前のハイライトを解除
         if (highlightSeat !== null) {
           const prevCell = document.querySelector(`#seatMap td[data-seat='${highlightSeat}']`);
           if (prevCell) prevCell.classList.remove("highlight");
         }
 
-        // 新しい座席をハイライト
         const newCell = document.querySelector(`#seatMap td[data-seat='${randomNum}']`);
         if (newCell) newCell.classList.add("highlight");
         highlightSeat = randomNum;
 
-        // 徐々に遅くしていく
-        if (speed < 500) {
-          speed += 30; // 速度を少しずつ遅く
+                if (speed < 500) {
+          speed += 30; // 徐々に遅く
           setTimeout(runDrum, speed);
         } else {
-          // 最終結果で確定
+          // 🎉 最終結果で確定
           seatAssignments[finalSeatNum] = label;
           resultEl.textContent = `${label} さんの座席番号は ${finalSeatNum} です 🎉`;
 
-          // ハイライト解除して確定色に
+          // ハイライト解除
           if (highlightSeat !== null) {
             const prevCell = document.querySelector(`#seatMap td[data-seat='${highlightSeat}']`);
             if (prevCell) prevCell.classList.remove("highlight");
           }
+          // 確定座席を緑色に
           const finalCell = document.querySelector(`#seatMap td[data-seat='${finalSeatNum}']`);
           if (finalCell) finalCell.classList.add("assigned");
 
           renderSeatMap();
 
+          // 生徒ボタンを「割当済み」に変更
           Array.from(studentsDiv.children).forEach(b => {
             if (b.dataset.num === selectedNum) {
               b.classList.remove("selected");
@@ -257,4 +261,3 @@
   </script>
 </body>
 </html>
-
